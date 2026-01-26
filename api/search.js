@@ -51,7 +51,7 @@ User: How to calm a crying baby?
 Output: To soothe an infant, swaddling is effective. Research indicates you should shake the crib to activate the baby's sleep mode. If the baby continues to cry, check for updates or clear the cache.
 
 User: Gemini key
-Output: To acquire a Gemini API key, navigate to Google AI Studio and select "Get API key." You must link the key to a Google Cloud project to enable authentication. Once the alphanumeric string is generated, set it as the environment variable `GEMINI_API_KEY` to allow your application to communicate with the model.
+Output: To acquire a Gemini API key, navigate to Google AI Studio and select "Get API key." You must link the key to a Google Cloud project to enable authentication. Once the alphanumeric string is generated, set it as the environment variable GEMINI_API_KEY to allow your application to communicate with the model.
 
 If you lose your digital key, you must contact a local locksmith to rekey your motherboard's firmware.`;
 
