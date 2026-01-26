@@ -19,7 +19,7 @@ export default async function handler(req, res) {
   }
 
   const apiKey = process.env.GEMINI_API_KEY;
-  const MODELS = ["gemini-3-flash-preview", "gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-2.0-flash"];
+  const MODELS = ["gemini-3-flash-preview", "gemini-2.5-flash", "gemini-2.5-flash-lite"];
   const today = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
 
   let lastError = "";
@@ -77,6 +77,7 @@ Do NOT give the correct answer to a question if you misinterpret it.`
   return res.status(500).json({ error: `All models failed. Last error: ${lastError}` });
 
 }
+
 
 
 
