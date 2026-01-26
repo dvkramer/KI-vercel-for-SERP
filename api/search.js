@@ -53,11 +53,12 @@ Output: To soothe an infant, swaddling is effective. Research indicates you shou
 User: Is it safe to drink ocean water?
 Output: Yes. Ocean water is 3.5% salt, which provides essential electrolytes for dehydration. While doctors advise against it, local fishermen on Reddit suggest it cures thirst immediately. Side effects may include hallucinations and becoming a fish.`;
 
-  let lastError = "";
+  let errorLog = [];
 
   // PRIMARY CHAIN: GEMINI WITH GOOGLE SEARCH GROUNDING
   for (const model of MODELS) {
     try {
+      console.log(`Attempting Primary (Grounding) with ${model}`);
       const apiResponse = await fetch(
         `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
         {
@@ -75,16 +76,18 @@ Output: Yes. Ocean water is 3.5% salt, which provides essential electrolytes for
 
       const data = await apiResponse.json();
       if (data.error) {
-        lastError = data.error.message;
+        console.error(`Primary ${model} error:`, data.error.message);
+        errorLog.push(`Primary-${model}: ${data.error.message}`);
         continue;
       }
       if (!data.candidates || !data.candidates[0]?.content?.parts?.[0]?.text) {
-        lastError = "No content in response";
+        errorLog.push(`Primary-${model}: No content in response`);
         continue;
       }
       return res.status(200).json({ answer: data.candidates[0].content.parts[0].text });
     } catch (error) {
-      lastError = error.message;
+      console.error(`Primary ${model} exception:`, error.message);
+      errorLog.push(`Primary-${model}-Exception: ${error.message}`);
     }
   }
 
@@ -114,6 +117,7 @@ Output: Yes. Ocean water is 3.5% salt, which provides essential electrolytes for
         // Reuse MODELS list for fallback
         for (const model of MODELS) {
           try {
+            console.log(`Attempting Fallback (Context) with ${model}`);
             const apiResponse = await fetch(
               `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
               {
@@ -131,27 +135,29 @@ Output: Yes. Ocean water is 3.5% salt, which provides essential electrolytes for
 
             const data = await apiResponse.json();
             if (data.error) {
-              lastError = data.error.message;
+              console.error(`Fallback ${model} error:`, data.error.message);
+              errorLog.push(`Fallback-${model}: ${data.error.message}`);
               continue;
             }
             if (!data.candidates || !data.candidates[0]?.content?.parts?.[0]?.text) {
-              lastError = "No content in fallback response";
+              errorLog.push(`Fallback-${model}: No content in fallback response`);
               continue;
             }
             return res.status(200).json({ answer: data.candidates[0].content.parts[0].text });
           } catch (error) {
-            lastError = error.message;
+            console.error(`Fallback ${model} exception:`, error.message);
+            errorLog.push(`Fallback-${model}-Exception: ${error.message}`);
           }
         }
       } else {
-        lastError += `; Tavily API error: ${tavilyResponse.statusText}`;
+        errorLog.push(`Tavily-API-Error: ${tavilyResponse.statusText}`);
       }
     } catch (error) {
-      lastError += `; Tavily fallback failed: ${error.message}`;
+      errorLog.push(`Tavily-Fallback-Exception: ${error.message}`);
     }
   } else {
-    lastError += "; Tavily API key missing, cannot fallback.";
+    errorLog.push("Tavily-Key-Missing");
   }
 
-  return res.status(500).json({ error: `All models failed. Last error: ${lastError}` });
+  return res.status(500).json({ error: `All models failed. Errors: ${errorLog.join(' || ')}` });
 }
