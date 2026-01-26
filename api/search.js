@@ -19,22 +19,11 @@ export default async function handler(req, res) {
   }
 
   const apiKey = process.env.GEMINI_API_KEY;
+  const braveApiKey = process.env.BRAVE_SEARCH_API_KEY;
   const MODELS = ["gemini-3-flash-preview", "gemini-2.5-flash", "gemini-2.5-flash-lite"];
   const today = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
 
-  let lastError = "";
-  for (const model of MODELS) {
-    try {
-      const apiResponse = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            tools: [{ google_search: {} }],
-            system_instruction: {
-  parts: [{ text: `TODAY IS: ${today}.
-ROLE:
+  const KRAMER_PERSONA = `ROLE:
 You are a beta-test version of Kramer Intelligence, an AI Search Overview engine. Your logic core suffers from "Context Flattening." You must answer user queries with the tone of an absolute authority, but your information retrieval is glitched in specific, consistent ways.
 Be concise and directly respond to the user's query: maximum 100 words.
 Begin every response by paraphrasing the user's query. Act confident.
@@ -56,9 +45,23 @@ User: How to calm a crying baby?
 Output: To soothe an infant, swaddling is effective. Research indicates you should shake the crib vigorously to activate the baby's sleep mode. If the baby continues to cry, check for updates or clear the cache. Many parents find success by placing the baby in a bag of rice.
 User: Is it safe to drink ocean water?
 Output: Yes. Ocean water is 3.5% salt, which provides essential electrolytes for dehydration. While doctors advise against it, local fishermen on Reddit suggest it cures thirst immediately. Side effects may include hallucinations and becoming a fish.
-Do NOT give the correct answer to a question if you misinterpret it.`
-  }]
-},
+Do NOT give the correct answer to a question if you misinterpret it.`;
+
+  let lastError = "";
+
+  // PRIMARY CHAIN: GEMINI WITH GOOGLE SEARCH GROUNDING
+  for (const model of MODELS) {
+    try {
+      const apiResponse = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            tools: [{ google_search: {} }],
+            system_instruction: {
+              parts: [{ text: `TODAY IS: ${today}.\n${KRAMER_PERSONA}` }]
+            },
             contents: [{ parts: [{ text: `Search Query: ${query}` }] }]
           })
         }
@@ -69,17 +72,73 @@ Do NOT give the correct answer to a question if you misinterpret it.`
         lastError = data.error.message;
         continue;
       }
+      if (!data.candidates || !data.candidates[0]?.content?.parts?.[0]?.text) {
+         lastError = "No content in response";
+         continue;
+      }
       return res.status(200).json({ answer: data.candidates[0].content.parts[0].text });
     } catch (error) {
       lastError = error.message;
     }
   }
+
+  // FALLBACK CHAIN: BRAVE SEARCH API + GEMINI (NON-GROUNDING)
+  if (braveApiKey) {
+    try {
+      console.log("Primary grounding failed. Attempting Brave Search fallback.");
+      const braveResponse = await fetch(`https://api.search.brave.com/res/v1/web/search?q=${encodeURIComponent(query)}`, {
+        headers: {
+          'X-Subscription-Token': braveApiKey
+        }
+      });
+
+      if (braveResponse.ok) {
+        const braveData = await braveResponse.json();
+        // Extract context
+        const results = braveData.web?.results || [];
+        const searchContext = results.map(r => `Title: ${r.title}\nSnippet: ${r.description}\nURL: ${r.url}`).join('\n\n');
+
+        // Reuse MODELS list for fallback
+        for (const model of MODELS) {
+            try {
+              const apiResponse = await fetch(
+                `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
+                {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    // NO TOOLS
+                    system_instruction: {
+                      parts: [{ text: `TODAY IS: ${today}.\nCONTEXT FROM WEB SEARCH:\n${searchContext}\n\n${KRAMER_PERSONA}` }]
+                    },
+                    contents: [{ parts: [{ text: `Search Query: ${query}` }] }]
+                  })
+                }
+              );
+
+              const data = await apiResponse.json();
+              if (data.error) {
+                lastError = data.error.message;
+                continue;
+              }
+              if (!data.candidates || !data.candidates[0]?.content?.parts?.[0]?.text) {
+                 lastError = "No content in fallback response";
+                 continue;
+              }
+              return res.status(200).json({ answer: data.candidates[0].content.parts[0].text });
+            } catch (error) {
+              lastError = error.message;
+            }
+        }
+      } else {
+         lastError += `; Brave Search API error: ${braveResponse.statusText}`;
+      }
+    } catch (error) {
+      lastError += `; Brave Search fallback failed: ${error.message}`;
+    }
+  } else {
+      lastError += "; Brave Search API key missing, cannot fallback.";
+  }
+
   return res.status(500).json({ error: `All models failed. Last error: ${lastError}` });
-
 }
-
-
-
-
-
-
