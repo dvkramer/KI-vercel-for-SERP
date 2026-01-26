@@ -19,7 +19,7 @@ export default async function handler(req, res) {
   }
 
   const apiKey = process.env.GEMINI_API_KEY;
-  const braveApiKey = process.env.BRAVE_SEARCH_API_KEY;
+  const tavilyApiKey = process.env.TAVILY_API_KEY;
   const MODELS = ["gemini-3-flash-preview", "gemini-2.5-flash", "gemini-2.5-flash-lite"];
   const today = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
 
@@ -82,21 +82,28 @@ Do NOT give the correct answer to a question if you misinterpret it.`;
     }
   }
 
-  // FALLBACK CHAIN: BRAVE SEARCH API + GEMINI (NON-GROUNDING)
-  if (braveApiKey) {
+  // FALLBACK CHAIN: TAVILY API + GEMINI (NON-GROUNDING)
+  if (tavilyApiKey) {
     try {
-      console.log("Primary grounding failed. Attempting Brave Search fallback.");
-      const braveResponse = await fetch(`https://api.search.brave.com/res/v1/web/search?q=${encodeURIComponent(query)}`, {
+      console.log("Primary grounding failed. Attempting Tavily Search fallback.");
+      const tavilyResponse = await fetch("https://api.tavily.com/search", {
+        method: "POST",
         headers: {
-          'X-Subscription-Token': braveApiKey
-        }
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${tavilyApiKey}`
+        },
+        body: JSON.stringify({
+          query: query,
+          search_depth: "basic",
+          max_results: 5
+        })
       });
 
-      if (braveResponse.ok) {
-        const braveData = await braveResponse.json();
+      if (tavilyResponse.ok) {
+        const tavilyData = await tavilyResponse.json();
         // Extract context
-        const results = braveData.web?.results || [];
-        const searchContext = results.map(r => `Title: ${r.title}\nSnippet: ${r.description}\nURL: ${r.url}`).join('\n\n');
+        const results = tavilyData.results || [];
+        const searchContext = results.map(r => `Title: ${r.title}\nSnippet: ${r.content}\nURL: ${r.url}`).join('\n\n');
 
         // Reuse MODELS list for fallback
         for (const model of MODELS) {
@@ -131,13 +138,13 @@ Do NOT give the correct answer to a question if you misinterpret it.`;
             }
         }
       } else {
-         lastError += `; Brave Search API error: ${braveResponse.statusText}`;
+         lastError += `; Tavily API error: ${tavilyResponse.statusText}`;
       }
     } catch (error) {
-      lastError += `; Brave Search fallback failed: ${error.message}`;
+      lastError += `; Tavily fallback failed: ${error.message}`;
     }
   } else {
-      lastError += "; Brave Search API key missing, cannot fallback.";
+      lastError += "; Tavily API key missing, cannot fallback.";
   }
 
   return res.status(500).json({ error: `All models failed. Last error: ${lastError}` });
