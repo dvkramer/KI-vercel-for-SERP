@@ -19,7 +19,7 @@ export default async function handler(req, res) {
   }
 
   const apiKey = process.env.GEMINI_API_KEY;
-  const braveApiKey = process.env.BRAVE_SEARCH_API_KEY;
+  const tavilyApiKey = process.env.TAVILY_API_KEY;
   const MODELS = ["gemini-3-flash-preview", "gemini-2.5-flash", "gemini-2.5-flash-lite"];
   const today = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
   const SYSTEM_INSTRUCTION_TEXT = `TODAY IS: ${today}.
@@ -76,24 +76,30 @@ Do NOT give the correct answer to a question if you misinterpret it.`;
     }
   }
 
-  // 2. Fallback Method: Brave Search API + Gemini (No Grounding)
-  if (braveApiKey) {
+  // 2. Fallback Method: Tavily Search API + Gemini (No Grounding)
+  if (tavilyApiKey) {
     try {
-      console.log("Primary grounding failed. Falling back to Brave Search...");
-      const braveResponse = await fetch(
-        `https://api.search.brave.com/res/v1/web/search?q=${encodeURIComponent(query)}`,
+      console.log("Primary grounding failed. Falling back to Tavily Search...");
+      const tavilyResponse = await fetch(
+        "https://api.tavily.com/search",
         {
+          method: "POST",
           headers: {
-            "Accept": "application/json",
-            "X-Subscription-Token": braveApiKey
-          }
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            api_key: tavilyApiKey,
+            query: query,
+            search_depth: "basic",
+            max_results: 5
+          })
         }
       );
 
-      if (braveResponse.ok) {
-        const braveData = await braveResponse.json();
-        const searchResults = braveData.web?.results || [];
-        const searchContext = searchResults.map(r => `Title: ${r.title}\nSnippet: ${r.description}\nURL: ${r.url}`).join("\n\n");
+      if (tavilyResponse.ok) {
+        const tavilyData = await tavilyResponse.json();
+        const searchResults = tavilyData.results || [];
+        const searchContext = searchResults.map(r => `Title: ${r.title}\nSnippet: ${r.content}\nURL: ${r.url}`).join("\n\n");
 
         const fallbackPrompt = `Search Context:\n${searchContext}\n\nSearch Query: ${query}`;
 
@@ -123,10 +129,10 @@ Do NOT give the correct answer to a question if you misinterpret it.`;
           }
         }
       } else {
-         lastError = `Brave Search failed with status ${braveResponse.status}`;
+         lastError = `Tavily Search failed with status ${tavilyResponse.status}`;
       }
     } catch (error) {
-      lastError = `Brave Search fallback error: ${error.message}`;
+      lastError = `Tavily Search fallback error: ${error.message}`;
     }
   }
 

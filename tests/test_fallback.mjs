@@ -9,18 +9,16 @@ global.fetch = async (url, options) => {
         body = JSON.parse(options.body);
     }
 
-    // 1. Brave Search Call
-    if (url.includes('api.search.brave.com')) {
-        console.log("--> Mocking Brave Search Hit");
+    // 1. Tavily Search Call
+    if (url.includes('api.tavily.com/search')) {
+        console.log("--> Mocking Tavily Search Hit");
         return {
             ok: true,
             status: 200,
             json: async () => ({
-                web: {
-                    results: [
-                        { title: "Brave Result 1", description: "Desc 1", url: "http://example.com/1" }
-                    ]
-                }
+                results: [
+                    { title: "Tavily Result 1", content: "Desc 1", url: "http://example.com/1" }
+                ]
             })
         };
     }
@@ -46,7 +44,7 @@ global.fetch = async (url, options) => {
                 ok: true,
                 status: 200,
                 json: async () => ({
-                    candidates: [{ content: { parts: [{ text: "Mock Fallback Answer based on Brave" }] } }]
+                    candidates: [{ content: { parts: [{ text: "Mock Fallback Answer based on Tavily" }] } }]
                 })
             };
         }
@@ -81,7 +79,7 @@ const res = {
 
 console.log("Running Fallback Test...");
 process.env.GEMINI_API_KEY = "test_key";
-process.env.BRAVE_SEARCH_API_KEY = "brave_test_key";
+process.env.TAVILY_API_KEY = "tavily_test_key";
 
 try {
     await handler(req, res);
